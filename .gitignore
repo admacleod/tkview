@@ -1,0 +1,3 @@
+# Ignore JetBrains IDE configuration files
+.idea
+*.iml

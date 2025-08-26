@@ -1,0 +1,20 @@
+#!/bin/sh
+
+# This is a simple build script to encapsulate some of the more complex Go commands
+# that are in use across the project.
+
+case $1 in
+  "lint")
+    # Linting is handled by golangci-lint, to ensure that all contributors are
+    # making use of the same version, and that version works with the current
+    # Go version the tool is installed using `go get -tool`, however as
+    # golangci-lint does not work well when dependencies are shared with other
+    # tools it requires its own `go.mod` file to store its dependencies
+    # separately. This means that running the command requires a slightly more
+    # complex than usual command.
+    go tool -modfile=internal/tools/golangci-lint/go.mod golangci-lint run
+    ;;
+  *)
+    echo "Unknown command $1"
+    ;;
+esac

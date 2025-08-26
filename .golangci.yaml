@@ -1,0 +1,12 @@
+version: "2"
+linters:
+  # Use every linter, it may be slow, but it enforces a very standardised code style and structure.
+  default: all
+  # Disabled linters should only be used for deprecated linters that are throwing warnings and have a valid replacement included.
+  disable:
+    - wsl # wsl is deprecated and replaced by wsl_v5
+issues:
+  # Show all issues found to avoid having to run the tool multiple times to discover all problem code.
+  max-issues-per-linter: 0
+  max-same-issues: 0
+  uniq-by-line: false
