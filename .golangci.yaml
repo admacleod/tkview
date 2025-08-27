@@ -2,10 +2,11 @@ version: "2"
 linters:
   # Use every linter, it may be slow, but it enforces a very standardised code style and structure.
   default: all
-  # Disabled linters should only be used for deprecated linters that are throwing warnings and have a valid replacement included.
   disable:
     - depguard # not yet required as no packages to be banned.
+    - exhaustruct # Gets excessive with third party libs even with nolint directives.
     - noinlineerr # I disagree with this, inline errors prevent accidental error shadowing.
+    - varnamelen # Short variable names are common and idiomatic in Go. Think `w` and `r` in an http.HandlerFunc.
     - wsl # wsl is deprecated and replaced by wsl_v5
 issues:
   # Show all issues found to avoid having to run the tool multiple times to discover all problem code.

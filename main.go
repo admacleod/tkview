@@ -2,13 +2,11 @@
 package main
 
 import (
-	"tkview/internal/model"
-
 	"github.com/charmbracelet/bubbletea/v2"
 )
 
 func main() {
-	m := model.Model{}
+	m := NewModel()
 
 	if _, err := tea.NewProgram(m, tea.WithAltScreen()).Run(); err != nil {
 		panic(err)
