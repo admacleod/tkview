@@ -2,7 +2,7 @@
 
 TestKube Terminal User Interface (TUI).
 
-Using [`rivo/tview`](https://github.com/rivo/tview).
+Using [`bubbletea`](https://github.com/charmbracelet/bubbletea).
 
 ## Non-goals
 
@@ -48,25 +48,16 @@ There is no need for `make` here at the moment.
 
 - [ ] API Authentication
   - UI and/or CLI flags
-  - [`Modal`](https://github.com/rivo/tview/wiki/Modal)?
-  - [`Form`](https://github.com/rivo/tview/wiki/Form)
   - Initial view before starting the main application.
 - [ ] Select Organisation and Environment
-  - [`TreeView`](https://github.com/rivo/tview/wiki/TreeView)
   - On Selected choose that Organisation and Environment combination.
 - [ ] Show Agent statuses
-  - [`VirtualTable`](https://github.com/rivo/tview/wiki/VirtualTable)
   - No selection required, display as in web UI.
 - [ ] Show Executions
-  - [`VirtualTable`](https://github.com/rivo/tview/wiki/VirtualTable)
   - How to show status?
   - Allow cancel.
-    - [`Modal`](https://github.com/rivo/tview/wiki/Modal)?
 - [ ] Start Execution
-  - [`Modal`](https://github.com/rivo/tview/wiki/Modal)?
-  - [`Form`](https://github.com/rivo/tview/wiki/Form)
 - [ ] Dive into granular Execution Step status
-  - May require creating a bespoke component to have a Table with expandable rows.
 
 ### Example UI
 

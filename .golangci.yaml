@@ -4,6 +4,8 @@ linters:
   default: all
   # Disabled linters should only be used for deprecated linters that are throwing warnings and have a valid replacement included.
   disable:
+    - depguard # not yet required as no packages to be banned.
+    - noinlineerr # I disagree with this, inline errors prevent accidental error shadowing.
     - wsl # wsl is deprecated and replaced by wsl_v5
 issues:
   # Show all issues found to avoid having to run the tool multiple times to discover all problem code.
