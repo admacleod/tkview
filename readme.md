@@ -53,7 +53,7 @@ There is no need for `make` here at the moment.
   - On Selected choose that Organisation and Environment combination.
 - [x] Show Agent statuses
   - No selection required, display as in web UI.
-- [ ] Show Executions
+- [x] Show Executions
   - How to show status?
 - [ ] Cancel Execution
 - [ ] Start Execution

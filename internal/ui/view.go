@@ -118,7 +118,7 @@ func (m Model) renderWorkflows() string {
 
 	title := "(W)orkflows"
 	if m.focused == viewWorkflows {
-		title += " | (c)ancel | (F)orce cancel"
+		title += " | (s)tart"
 	}
 
 	t := tree.Root(title).
