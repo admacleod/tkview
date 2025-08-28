@@ -5,6 +5,7 @@ linters:
   disable:
     - depguard # not yet required as no packages to be banned.
     - exhaustruct # Gets excessive with third party libs even with nolint directives.
+    - lll # It isn't the 70s any more, so we don't have to worry about people using 80x24 terminals to read code.
     - noinlineerr # I disagree with this, inline errors prevent accidental error shadowing.
     - varnamelen # Short variable names are common and idiomatic in Go. Think `w` and `r` in an http.HandlerFunc.
     - wsl # wsl is deprecated and replaced by wsl_v5

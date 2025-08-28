@@ -2,8 +2,8 @@ package ui
 
 import (
 	"tkview/internal/agent"
-	"tkview/internal/execution"
 	"tkview/internal/tkview"
+	"tkview/internal/workflow"
 
 	"github.com/charmbracelet/bubbles/v2/textinput"
 	"github.com/charmbracelet/bubbletea/v2"
@@ -12,9 +12,9 @@ import (
 type view int
 
 const (
-	viewOrgs view = iota
+	viewEnvs view = iota
 	viewAgents
-	viewExecutions
+	viewWorkflows
 )
 
 const (
@@ -36,7 +36,8 @@ type Model struct {
 	focused           view
 	orgs              []tkview.Organisation
 	agents            []agent.Agent
-	executions        []execution.Execution
+	workflows         []tkview.Workflow
+	expandedWorkflows map[workflow.ID]struct{}
 }
 
 // NewModel creates a new Model.
@@ -51,6 +52,7 @@ func NewModel(tkview *tkview.TKView) Model {
 		tableBorderHeight: uiTableBorderHeight,
 		keyMap:            defaultKeyMap(),
 		tkview:            tkview,
+		expandedWorkflows: make(map[workflow.ID]struct{}),
 	}
 }
 

@@ -12,8 +12,8 @@ import (
 
 	"tkview/internal/agent"
 	"tkview/internal/environment"
-	"tkview/internal/execution"
 	"tkview/internal/organisation"
+	"tkview/internal/workflow"
 
 	"github.com/kubeshop/testkube/cmd/kubectl-testkube/commands/agents"
 	"github.com/kubeshop/testkube/pkg/api/v1/testkube"
@@ -31,7 +31,7 @@ type Client struct {
 var (
 	_ agent.Lister        = Client{}
 	_ environment.Lister  = Client{}
-	_ execution.Lister    = Client{}
+	_ workflow.Lister     = Client{}
 	_ organisation.Lister = Client{}
 )
 
@@ -107,28 +107,95 @@ func (c Client) ListAgents(organisationID organisation.ID) ([]agent.Agent, error
 	return ret, nil
 }
 
-const listExecutionPath = "%s/organizations/%s/environments/%s/agent/test-workflow-executions"
+const (
+	listWorkflowPath  = "%s/organizations/%s/environments/%s/agent/test-workflow-with-executions"
+	listExecutionPath = "%s/organizations/%s/environments/%s/agent/test-workflows/%s/executions"
+)
+
+// ListWorkflows returns all workflows under the passed organisation and environment.
+// Sadly, all parameters are required due to the testkube API.
+func (c Client) ListWorkflows(orgID organisation.ID, envID environment.ID) ([]workflow.Workflow, error) {
+	url := fmt.Sprintf(listWorkflowPath, c.url, orgID, envID)
+
+	var result []testkube.TestWorkflowWithExecutionSummary
+	if err := c.callTestKubeAPI(url, &result); err != nil {
+		return nil, fmt.Errorf("call testkube api: %w", err)
+	}
+
+	ret := make([]workflow.Workflow, 0, len(result))
+	for _, w := range result {
+		if w.Workflow == nil {
+			// Skip this broken workflow.
+			continue
+		}
+
+		// Might not be any executions.
+		var lastExecutionAt time.Time
+
+		var lastExecutionStatus string
+
+		if w.LatestExecution != nil {
+			lastExecutionAt = w.LatestExecution.ScheduledAt
+			if w.LatestExecution.Result != nil && w.LatestExecution.Result.Status != nil {
+				lastExecutionStatus = string(*w.LatestExecution.Result.Status)
+			}
+		}
+
+		ret = append(ret, workflow.Workflow{
+			ID:                  workflow.ID(w.Workflow.Name),
+			Name:                w.Workflow.Name,
+			LastExecutionAt:     lastExecutionAt,
+			LastExecutionStatus: lastExecutionStatus,
+		})
+	}
+
+	return ret, nil
+}
+
+// ListExecutions returns all executions under the passed organisation, environment, and workflow.
+// Sadly, all parameters are required due to the testkube API.
+func (c Client) ListExecutions(orgID organisation.ID, envID environment.ID, id workflow.ID) ([]workflow.Execution, error) {
+	url := fmt.Sprintf(listExecutionPath, c.url, orgID, envID, id)
+
+	var result testkube.TestWorkflowExecutionsResult
+	if err := c.callTestKubeAPI(url, &result); err != nil {
+		return nil, fmt.Errorf("call testkube api: %w", err)
+	}
+
+	ret := make([]workflow.Execution, 0, len(result.Results))
+	for _, e := range result.Results {
+		status := "unknown"
+		if e.Result != nil && e.Result.Status != nil {
+			status = string(*e.Result.Status)
+		}
+
+		ret = append(ret, workflow.Execution{
+			ID:        workflow.ExecutionID(e.Id),
+			Name:      e.Name,
+			StartedAt: e.ScheduledAt,
+			Status:    status,
+		})
+	}
+
+	return ret, nil
+}
 
 var errResponseCode = errors.New("unexpected HTTP status code")
 
-// ListExecutions returns all executions under the passed organisation and environment,
-// sadly both are required due to the testkube API.
-func (c Client) ListExecutions(orgID organisation.ID, envID environment.ID) ([]execution.Execution, error) {
-	url := fmt.Sprintf(listExecutionPath, c.url, orgID, envID)
-
+func (c Client) callTestKubeAPI(url string, result any) error {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
-		return nil, fmt.Errorf("create list executions request to %q: %w", url, err)
+		return fmt.Errorf("create request to %q: %w", url, err)
 	}
 
 	req.Header.Add("Authorization", "Bearer "+c.token)
 
 	res, err := http.DefaultClient.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("doing list executions request to %q: %w", url, err)
+		return fmt.Errorf("doing request to %q: %w", url, err)
 	}
 
 	defer func() {
@@ -139,28 +206,17 @@ func (c Client) ListExecutions(orgID organisation.ID, envID environment.ID) ([]e
 	switch res.StatusCode {
 	case http.StatusRequestTimeout:
 		// There may be an issue at the agent, this is fine, but nothing will be returned.
-		return nil, nil
+		return nil
 	case http.StatusOK:
 		// Everything is fine and working as expected!
 		break
 	default:
-		return nil, fmt.Errorf("list executions request to %q returned status %d: %w", url, res.StatusCode, errResponseCode)
+		return fmt.Errorf("request to %q returned status %d: %w", url, res.StatusCode, errResponseCode)
 	}
 
-	var result testkube.TestWorkflowExecutionsResult
-	if err := json.NewDecoder(res.Body).Decode(&result); err != nil {
-		return nil, fmt.Errorf("decode list executions response body: %w", err)
+	if err := json.NewDecoder(res.Body).Decode(result); err != nil {
+		return fmt.Errorf("decode response body: %w", err)
 	}
 
-	ret := make([]execution.Execution, 0, len(result.Results))
-	for _, e := range result.Results {
-		ret = append(ret, execution.Execution{
-			ID:        execution.ID(e.Id),
-			Name:      e.Name,
-			StartedAt: e.ScheduledAt,
-			Status:    string(*e.Result.Status),
-		})
-	}
-
-	return ret, nil
+	return nil
 }

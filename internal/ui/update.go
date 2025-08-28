@@ -3,11 +3,12 @@ package ui
 
 import (
 	"fmt"
+	"sort"
 
 	"tkview/internal/agent"
 	"tkview/internal/environment"
-	"tkview/internal/execution"
 	"tkview/internal/tkview"
+	"tkview/internal/workflow"
 
 	"github.com/charmbracelet/bubbles/v2/key"
 	"github.com/charmbracelet/bubbletea/v2"
@@ -18,7 +19,10 @@ type focusMsg view
 type orgTreeMsg []tkview.Organisation
 type envMsg environment.ID
 type agentsMsg []agent.Agent
-type executionsMsg []execution.Execution
+type workflowTreeMsg []tkview.Workflow
+type workflowTreeUpdateMsg []tkview.Workflow
+type workflowMsg workflow.ID
+type toggleWorkflowMsg workflow.ID
 
 func errCmd(err error) tea.Cmd {
 	return func() tea.Msg {
@@ -38,9 +42,15 @@ func switchEnvCmd(id environment.ID) tea.Cmd {
 	}
 }
 
+func switchWorkflowCmd(id workflow.ID) tea.Cmd {
+	return func() tea.Msg {
+		return workflowMsg(id)
+	}
+}
+
 // Update responds to tea messages to create a new model implementation.
 //
-//nolint:cyclop,funlen // This is going to be a big function because it handles all the UI update logic.
+//nolint:cyclop,gocyclo,funlen // This is going to be a big function because it handles all the UI update logic.
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	// Basic messages for the general good behaviour of the program.
 	switch msg := msg.(type) {
@@ -50,24 +60,30 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, tea.Quit
 		case key.Matches(msg.Key(), m.keyMap.Next):
 			switch m.focused {
-			case viewOrgs:
+			case viewEnvs:
 				return m, m.nextOrgEnv
 			case viewAgents:
-			case viewExecutions:
+			case viewWorkflows:
+				return m, m.nextWorkflow
 			}
 		case key.Matches(msg.Key(), m.keyMap.Prev):
 			switch m.focused {
-			case viewOrgs:
+			case viewEnvs:
 				return m, m.prevOrgEnv
 			case viewAgents:
-			case viewExecutions:
+			case viewWorkflows:
+				return m, m.prevWorkflow
 			}
-		case key.Matches(msg.Key(), m.keyMap.FocusOrganisations):
-			return m, focusCmd(viewOrgs)
+		case key.Matches(msg.Key(), m.keyMap.Select):
+			if m.focused == viewWorkflows {
+				return m, m.toggleWorkflow
+			}
+		case key.Matches(msg.Key(), m.keyMap.FocusEnvironments):
+			return m, focusCmd(viewEnvs)
 		case key.Matches(msg.Key(), m.keyMap.FocusAgents):
 			return m, focusCmd(viewAgents)
-		case key.Matches(msg.Key(), m.keyMap.FocusExecutions):
-			return m, focusCmd(viewExecutions)
+		case key.Matches(msg.Key(), m.keyMap.FocusWorkflows):
+			return m, focusCmd(viewWorkflows)
 		}
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
@@ -92,14 +108,64 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// After the environment changes, load the agents and executions again.
 		return m, tea.Batch(
 			m.loadAgents,
-			m.loadExecutions,
+			m.loadWorkflowTree,
 		)
 	case agentsMsg:
 		m.agents = msg
 
 		return m, nil
-	case executionsMsg:
-		m.executions = msg
+	case workflowTreeMsg:
+		// Sort workflows by the last execution time as these are likely
+		// the most interesting for a user.
+		sort.Slice(msg, func(i, j int) bool {
+			return msg[i].LastExecutionAt.After(msg[j].LastExecutionAt)
+		})
+
+		m.workflows = msg
+
+		return m, switchWorkflowCmd(msg[0].ID)
+	case workflowTreeUpdateMsg:
+		// Sort workflows by the last execution time as these are likely
+		// the most interesting for a user.
+		sort.Slice(msg, func(i, j int) bool {
+			return msg[i].LastExecutionAt.After(msg[j].LastExecutionAt)
+		})
+
+		m.workflows = msg
+
+		// Check the selected workflow still exists.
+		currentWorkflow, err := m.tkview.GetCurrentWorkflow()
+		if err != nil {
+			return m, errCmd(err)
+		}
+
+		for _, w := range m.workflows {
+			if w.ID == currentWorkflow.ID {
+				return m, nil
+			}
+		}
+
+		// If not, switch to the first workflow again.
+		return m, switchWorkflowCmd(m.workflows[0].ID)
+	case workflowMsg:
+		err := m.tkview.SelectWorkflow(workflow.ID(msg))
+		if err != nil {
+			return m, errCmd(err)
+		}
+
+		// After the workflow is selected, update the workflow tree.
+		return m, m.updateWorkflowTree
+	case toggleWorkflowMsg:
+		id := workflow.ID(msg)
+
+		_, exists := m.expandedWorkflows[id]
+		if !exists {
+			m.expandedWorkflows[id] = struct{}{}
+
+			return m, nil
+		}
+
+		delete(m.expandedWorkflows, id)
 
 		return m, nil
 	case focusMsg:
@@ -131,7 +197,7 @@ func (m Model) nextOrgEnv() tea.Msg {
 			if e.ID == currentEnv.ID {
 				switch {
 				case i+1 == len(m.orgs) && j+1 == len(o.Envs):
-					// Nowhere to go such loop back to the start.
+					// Nowhere to go, loop back to the start.
 					// TODO: this is dangerous, the first org might not have any environments!
 					return envMsg(m.orgs[0].Envs[0].ID)
 				case j+1 == len(o.Envs):
@@ -162,7 +228,7 @@ func (m Model) prevOrgEnv() tea.Msg {
 			if e.ID == currentEnv.ID {
 				switch {
 				case i-1 < 0 && j-1 < 0:
-					// Nowhere to go such loop back to the bottom.
+					// Nowhere to go, loop back to the bottom.
 					// TODO: this is dangerous, the last org might not have any environments!
 					return envMsg(m.orgs[len(m.orgs)-1].Envs[len(m.orgs[len(m.orgs)-1].Envs)-1].ID)
 				case j-1 < 0:
@@ -191,11 +257,71 @@ func (m Model) loadAgents() tea.Msg {
 	return agentsMsg(agents)
 }
 
-func (m Model) loadExecutions() tea.Msg {
-	executions, err := m.tkview.GetExecutions()
+func (m Model) loadWorkflowTree() tea.Msg {
+	workflowTree, err := m.tkview.GetWorkflowTree()
 	if err != nil {
-		return errMsg(fmt.Errorf("get executions: %w", err))
+		return errMsg(fmt.Errorf("get workflow tree: %w", err))
 	}
 
-	return executionsMsg(executions)
+	return workflowTreeMsg(workflowTree)
+}
+
+func (m Model) updateWorkflowTree() tea.Msg {
+	workflowTree, err := m.tkview.GetWorkflowTree()
+	if err != nil {
+		return errMsg(fmt.Errorf("get workflow tree: %w", err))
+	}
+
+	return workflowTreeUpdateMsg(workflowTree)
+}
+
+func (m Model) nextWorkflow() tea.Msg {
+	currentWorkflow, err := m.tkview.GetCurrentWorkflow()
+	if err != nil {
+		return errMsg(fmt.Errorf("get current workflow: %w", err))
+	}
+
+	for i, w := range m.workflows {
+		if w.ID == currentWorkflow.ID {
+			if i+1 == len(m.workflows) {
+				// Nowhere to go, loop back to the start.
+				return workflowMsg(m.workflows[0].ID)
+			}
+			// Go to the next workflow
+			return workflowMsg(m.workflows[i+1].ID)
+		}
+	}
+	// This shouldn't happen, but could.
+	// TODO: probably do something here
+	return nil
+}
+
+func (m Model) prevWorkflow() tea.Msg {
+	currentWorkflow, err := m.tkview.GetCurrentWorkflow()
+	if err != nil {
+		return errMsg(fmt.Errorf("get current workflow: %w", err))
+	}
+
+	for i, w := range m.workflows {
+		if w.ID == currentWorkflow.ID {
+			if i-1 < 0 {
+				// Nowhere to go, loop back to the end.
+				return workflowMsg(m.workflows[len(m.workflows)-1].ID)
+			}
+			// Go to the previous workflow
+			return workflowMsg(m.workflows[i-1].ID)
+		}
+	}
+	// This shouldn't happen, but could.
+	// TODO: probably do something here
+	return nil
+}
+
+func (m Model) toggleWorkflow() tea.Msg {
+	currentWorkflow, err := m.tkview.GetCurrentWorkflow()
+	if err != nil {
+		return errMsg(fmt.Errorf("get current workflow: %w", err))
+	}
+
+	return toggleWorkflowMsg(currentWorkflow.ID)
 }
