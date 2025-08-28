@@ -158,7 +158,7 @@ func (v *TKView) GetExecutions() ([]execution.Execution, error) {
 		return nil, errNoOrgOrEnv
 	}
 
-	executions, err := v.client.ListExecutions(v.currentEnv)
+	executions, err := v.client.ListExecutions(v.currentOrg, v.currentEnv)
 	if err != nil {
 		return nil, fmt.Errorf("list executions: %w", err)
 	}

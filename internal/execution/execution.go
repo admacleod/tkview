@@ -3,6 +3,7 @@ package execution
 
 import (
 	"tkview/internal/environment"
+	"tkview/internal/organisation"
 )
 
 // ID is the unique identifier of a test workflow execution.
@@ -16,5 +17,5 @@ type Execution struct {
 
 // Lister should return test workflow executions from a datasource.
 type Lister interface {
-	ListExecutions(environmentID environment.ID) ([]Execution, error)
+	ListExecutions(organisationID organisation.ID, environmentID environment.ID) ([]Execution, error)
 }

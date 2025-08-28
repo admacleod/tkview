@@ -192,6 +192,10 @@ func (m Model) loadAgents() tea.Msg {
 }
 
 func (m Model) loadExecutions() tea.Msg {
-	// TODO: not yet implemented
-	return nil
+	executions, err := m.tkview.GetExecutions()
+	if err != nil {
+		return errMsg(fmt.Errorf("get executions: %w", err))
+	}
+
+	return executionsMsg(executions)
 }

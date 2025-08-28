@@ -3,7 +3,9 @@
 package testkube
 
 import (
+	"encoding/json"
 	"fmt"
+	"net/http"
 
 	"tkview/internal/agent"
 	"tkview/internal/environment"
@@ -11,6 +13,7 @@ import (
 	"tkview/internal/organisation"
 
 	"github.com/kubeshop/testkube/cmd/kubectl-testkube/commands/agents"
+	"github.com/kubeshop/testkube/pkg/api/v1/testkube"
 	"github.com/kubeshop/testkube/pkg/cloud/client"
 )
 
@@ -101,9 +104,37 @@ func (c Client) ListAgents(organisationID organisation.ID) ([]agent.Agent, error
 	return ret, nil
 }
 
-// ListExecutions returns all executions under the passed environment.
-// Deprecated: Not yet implemented.
-func (c Client) ListExecutions(_ environment.ID) ([]execution.Execution, error) {
-	// TODO implement me
-	panic("implement me")
+// ListExecutions returns all executions under the passed organisation and environment, sadly both are required due to the testkube API.
+func (c Client) ListExecutions(organisationID organisation.ID, environmentID environment.ID) ([]execution.Execution, error) {
+	url := fmt.Sprintf("%s/organizations/%s/environments/%s/agent/test-workflow-executions", c.url, organisationID, environmentID)
+	req, err := http.NewRequest(http.MethodGet, url, nil)
+	if err != nil {
+		return nil, fmt.Errorf("create list executions request to %q: %w", url, err)
+	}
+	req.Header.Add("Authorization", "Bearer "+c.token)
+
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("doing list executions request to %q: %w", url, err)
+	}
+	defer res.Body.Close()
+
+	if res.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("list executions request to %q returned status %d", url, res.StatusCode)
+	}
+
+	var result testkube.TestWorkflowExecutionsResult
+	if err := json.NewDecoder(res.Body).Decode(&result); err != nil {
+		return nil, fmt.Errorf("decode list executions response body: %w", err)
+	}
+
+	var ret []execution.Execution
+	for _, e := range result.Results {
+		ret = append(ret, execution.Execution{
+			ID:   execution.ID(e.Id),
+			Name: e.Name,
+		})
+	}
+
+	return ret, nil
 }

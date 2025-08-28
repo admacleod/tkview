@@ -89,29 +89,42 @@ func (m Model) renderAgents() string {
 		t.Row(agent.Name, agent.Type, agent.Version, agent.LastSeen.Format(lastSeenFormat))
 	}
 
-	if len(m.agents) < m.topBoxTableRows {
-		m.padAgentTable(t)
-	}
+	m.padAgentTable(t)
 
 	return t.Render()
 }
 
 func (m Model) padAgentTable(t *table.Table) {
 	blankRow := []string{"", "", "", ""}
-	for range m.topBoxTableRows - len(m.agents) {
+	for range m.topBoxHeight - m.tableBorderHeight - len(m.agents) {
 		t.Row(blankRow...)
 	}
 }
 
 func (m Model) renderExecutions() string {
-	box := lipgloss.NewStyle().
-		Border(lipgloss.NormalBorder(), true, true, true).
+	t := table.New().
+		Border(lipgloss.NormalBorder()).
 		Height(m.height - m.topBoxHeight).
-		Width(m.width)
+		Width(m.width).
+		Wrap(true).
+		Headers("(E)xecutions")
 
 	if m.focused == viewExecutions {
-		box = box.BorderStyle(lipgloss.DoubleBorder())
+		t.Border(lipgloss.DoubleBorder())
 	}
 
-	return box.Render("(E)xecutions")
+	for _, execution := range m.executions {
+		t.Row(execution.Name)
+	}
+
+	m.padExecutionTable(t)
+
+	return t.Render()
+}
+
+func (m Model) padExecutionTable(t *table.Table) {
+	blankRow := []string{""}
+	for range m.height - m.topBoxHeight - m.tableBorderHeight - len(m.executions) {
+		t.Row(blankRow...)
+	}
 }
