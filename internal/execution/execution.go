@@ -2,6 +2,8 @@
 package execution
 
 import (
+	"time"
+
 	"tkview/internal/environment"
 	"tkview/internal/organisation"
 )
@@ -11,8 +13,10 @@ type ID string
 
 // Execution is a tkview representation of a test workflow execution.
 type Execution struct {
-	ID   ID
-	Name string
+	ID        ID
+	Name      string
+	StartedAt time.Time
+	Status    string
 }
 
 // Lister should return test workflow executions from a datasource.

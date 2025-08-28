@@ -46,16 +46,16 @@ There is no need for `make` here at the moment.
 
 ## TODO
 
-- [ ] API Authentication
-  - UI and/or CLI flags
-  - Initial view before starting the main application.
-- [ ] Select Organisation and Environment
+- [x] API Authentication
+  - UI and/or CLI flags. _CLI Only because authenticating is a total nightmare._
+  - Initial view before starting the main application. _N/A_
+- [x] Select Organisation and Environment
   - On Selected choose that Organisation and Environment combination.
-- [ ] Show Agent statuses
+- [x] Show Agent statuses
   - No selection required, display as in web UI.
 - [ ] Show Executions
   - How to show status?
-  - Allow cancel.
+- [ ] Cancel Execution
 - [ ] Start Execution
 - [ ] Dive into granular Execution Step status
 

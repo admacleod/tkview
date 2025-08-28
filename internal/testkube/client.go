@@ -3,9 +3,12 @@
 package testkube
 
 import (
+	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
+	"time"
 
 	"tkview/internal/agent"
 	"tkview/internal/environment"
@@ -104,23 +107,44 @@ func (c Client) ListAgents(organisationID organisation.ID) ([]agent.Agent, error
 	return ret, nil
 }
 
-// ListExecutions returns all executions under the passed organisation and environment, sadly both are required due to the testkube API.
-func (c Client) ListExecutions(organisationID organisation.ID, environmentID environment.ID) ([]execution.Execution, error) {
-	url := fmt.Sprintf("%s/organizations/%s/environments/%s/agent/test-workflow-executions", c.url, organisationID, environmentID)
-	req, err := http.NewRequest(http.MethodGet, url, nil)
+const listExecutionPath = "%s/organizations/%s/environments/%s/agent/test-workflow-executions"
+
+var errResponseCode = errors.New("unexpected HTTP status code")
+
+// ListExecutions returns all executions under the passed organisation and environment,
+// sadly both are required due to the testkube API.
+func (c Client) ListExecutions(orgID organisation.ID, envID environment.ID) ([]execution.Execution, error) {
+	url := fmt.Sprintf(listExecutionPath, c.url, orgID, envID)
+
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+	defer cancel()
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		return nil, fmt.Errorf("create list executions request to %q: %w", url, err)
 	}
+
 	req.Header.Add("Authorization", "Bearer "+c.token)
 
 	res, err := http.DefaultClient.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("doing list executions request to %q: %w", url, err)
 	}
-	defer res.Body.Close()
 
-	if res.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("list executions request to %q returned status %d", url, res.StatusCode)
+	defer func() {
+		// Too late to handle this error, and we don't really care.
+		_ = res.Body.Close()
+	}()
+
+	switch res.StatusCode {
+	case http.StatusRequestTimeout:
+		// There may be an issue at the agent, this is fine, but nothing will be returned.
+		return nil, nil
+	case http.StatusOK:
+		// Everything is fine and working as expected!
+		break
+	default:
+		return nil, fmt.Errorf("list executions request to %q returned status %d: %w", url, res.StatusCode, errResponseCode)
 	}
 
 	var result testkube.TestWorkflowExecutionsResult
@@ -128,11 +152,13 @@ func (c Client) ListExecutions(organisationID organisation.ID, environmentID env
 		return nil, fmt.Errorf("decode list executions response body: %w", err)
 	}
 
-	var ret []execution.Execution
+	ret := make([]execution.Execution, 0, len(result.Results))
 	for _, e := range result.Results {
 		ret = append(ret, execution.Execution{
-			ID:   execution.ID(e.Id),
-			Name: e.Name,
+			ID:        execution.ID(e.Id),
+			Name:      e.Name,
+			StartedAt: e.ScheduledAt,
+			Status:    string(*e.Result.Status),
 		})
 	}
 

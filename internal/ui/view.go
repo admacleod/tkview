@@ -104,17 +104,23 @@ func (m Model) padAgentTable(t *table.Table) {
 func (m Model) renderExecutions() string {
 	t := table.New().
 		Border(lipgloss.NormalBorder()).
-		Height(m.height - m.topBoxHeight).
+		Height(m.height-m.topBoxHeight).
 		Width(m.width).
 		Wrap(true).
-		Headers("(E)xecutions")
+		Headers("(E)xecutions", "Started", "Status")
 
 	if m.focused == viewExecutions {
 		t.Border(lipgloss.DoubleBorder())
 	}
 
 	for _, execution := range m.executions {
-		t.Row(execution.Name)
+		startedAtFormat := time.RFC822
+		// If last seen today only show the time.
+		if execution.StartedAt.Format(time.DateOnly) == time.Now().Format(time.DateOnly) {
+			startedAtFormat = "15:04 MST"
+		}
+
+		t.Row(execution.Name, execution.StartedAt.Format(startedAtFormat), execution.Status)
 	}
 
 	m.padExecutionTable(t)
@@ -123,7 +129,7 @@ func (m Model) renderExecutions() string {
 }
 
 func (m Model) padExecutionTable(t *table.Table) {
-	blankRow := []string{""}
+	blankRow := []string{"", "", ""}
 	for range m.height - m.topBoxHeight - m.tableBorderHeight - len(m.executions) {
 		t.Row(blankRow...)
 	}

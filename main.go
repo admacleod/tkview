@@ -14,9 +14,13 @@ import (
 )
 
 func main() {
-	var token string
+	var (
+		token string
+		url   string
+	)
 
 	flag.StringVar(&token, "token", "", "API Token")
+	flag.StringVar(&url, "url", "http://localhost:8099", "URL")
 	flag.Parse()
 
 	if token == "" {
@@ -24,7 +28,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	client := testkube.New("http://localhost:8099", token)
+	client := testkube.New(url, token)
 	tk := tkview.New(client)
 
 	m := ui.NewModel(tk)
