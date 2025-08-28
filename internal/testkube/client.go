@@ -10,6 +10,7 @@ import (
 	"tkview/internal/execution"
 	"tkview/internal/organisation"
 
+	"github.com/kubeshop/testkube/cmd/kubectl-testkube/commands/agents"
 	"github.com/kubeshop/testkube/pkg/cloud/client"
 )
 
@@ -83,9 +84,17 @@ func (c Client) ListAgents(organisationID organisation.ID) ([]agent.Agent, error
 
 	ret := make([]agent.Agent, 0, len(aa))
 	for _, a := range aa {
+		agentType, err := agents.GetCliAgentType(a.Type)
+		if err != nil {
+			agentType = "Unknown"
+		}
+
 		ret = append(ret, agent.Agent{
-			ID:   agent.ID(a.ID),
-			Name: a.Name,
+			ID:       agent.ID(a.ID),
+			Name:     a.Name,
+			Type:     agentType,
+			Version:  a.Version,
+			LastSeen: *a.AccessedAt,
 		})
 	}
 

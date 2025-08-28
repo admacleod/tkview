@@ -2,6 +2,8 @@
 package agent
 
 import (
+	"time"
+
 	"tkview/internal/organisation"
 )
 
@@ -10,8 +12,11 @@ type ID string
 
 // Agent is a tkview representation of an agent.
 type Agent struct {
-	ID   ID
-	Name string
+	ID       ID
+	Name     string
+	Type     string
+	Version  string
+	LastSeen time.Time
 }
 
 // Lister should return agents from a datasource.

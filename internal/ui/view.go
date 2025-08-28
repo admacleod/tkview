@@ -1,51 +1,47 @@
 package ui
 
 import (
-	"strings"
+	"time"
 
 	"github.com/charmbracelet/lipgloss/v2"
+	"github.com/charmbracelet/lipgloss/v2/table"
 	"github.com/charmbracelet/lipgloss/v2/tree"
 )
 
 // View renders the model for display on the terminal.
 func (m Model) View() string {
-	boxHeight := 8
-
-	topBox := lipgloss.NewStyle().
-		Border(lipgloss.DoubleBorder(), true, true, true, true).
-		Height(boxHeight).
-		Width(m.width / 2) //nolint:mnd // Half width for top boxes.
-
-	mainFrame := lipgloss.NewStyle().
-		Border(lipgloss.DoubleBorder(), true, true, true).
-		Height(m.height - boxHeight).
-		Width(m.width)
-
-	organisationBox := topBox.
-		Render(m.renderOrganisations())
-	agentBox := topBox.
-		Render(m.renderAgents())
-	executionBox := mainFrame.
-		Render("Executions")
-
-	topRow := lipgloss.JoinHorizontal(0, organisationBox, agentBox)
-
-	frame := lipgloss.JoinVertical(0, topRow, executionBox)
+	frame := lipgloss.JoinVertical(0,
+		lipgloss.JoinHorizontal(0,
+			m.renderOrganisations(),
+			m.renderAgents(),
+		),
+		m.renderExecutions(),
+	)
 
 	return frame
 }
 
 func (m Model) renderOrganisations() string {
-	currentEnv, err := m.tkview.GetCurrentEnvironment()
-	if err != nil {
-		return err.Error()
+	box := lipgloss.NewStyle().
+		Border(lipgloss.NormalBorder(), true, true, true, true).
+		Height(m.topBoxHeight).
+		Width(m.width / m.topBoxCount)
+
+	if m.focused == viewOrgs {
+		box = box.BorderStyle(lipgloss.DoubleBorder())
 	}
 
-	t := tree.Root("Environments").
+	currentEnv, err := m.tkview.GetCurrentEnvironment()
+	if err != nil {
+		return box.Render(err.Error())
+	}
+
+	t := tree.Root("(O)rganisations and Environments").
 		ItemStyleFunc(func(children tree.Children, i int) lipgloss.Style {
 			if children.At(i).Value() == currentEnv.Name {
 				return lipgloss.NewStyle().
-					Background(lipgloss.Color("240"))
+					Background(lipgloss.BrightBlue).
+					Foreground(lipgloss.White)
 			}
 
 			return lipgloss.NewStyle()
@@ -61,18 +57,61 @@ func (m Model) renderOrganisations() string {
 		t.Child(orgTree)
 	}
 
-	return t.String()
+	return box.Render(t.String())
 }
 
 func (m Model) renderAgents() string {
+	t := table.New().
+		Border(lipgloss.NormalBorder()).
+		Height(m.topBoxHeight).
+		Width(m.width/m.topBoxCount).
+		Wrap(true).
+		Headers("(A)gents", "Type", "Version", "LastSeen")
+
+	if m.focused == viewAgents {
+		t.Border(lipgloss.DoubleBorder())
+	}
+
 	if len(m.agents) == 0 {
-		return "No agents found"
+		t.Row("No agents found", "", "", "")
+		m.padAgentTable(t)
+
+		return t.Render()
 	}
 
-	agents := make([]string, 0, len(m.agents))
 	for _, agent := range m.agents {
-		agents = append(agents, agent.Name)
+		lastSeenFormat := time.RFC822
+		// If last seen today only show the time.
+		if agent.LastSeen.Format(time.DateOnly) == time.Now().Format(time.DateOnly) {
+			lastSeenFormat = "15:04 MST"
+		}
+
+		t.Row(agent.Name, agent.Type, agent.Version, agent.LastSeen.Format(lastSeenFormat))
 	}
 
-	return strings.Join(agents, "\n")
+	if len(m.agents) < m.topBoxTableRows {
+		m.padAgentTable(t)
+	}
+
+	return t.Render()
+}
+
+func (m Model) padAgentTable(t *table.Table) {
+	blankRow := []string{"", "", "", ""}
+	for range m.topBoxTableRows - len(m.agents) {
+		t.Row(blankRow...)
+	}
+}
+
+func (m Model) renderExecutions() string {
+	box := lipgloss.NewStyle().
+		Border(lipgloss.NormalBorder(), true, true, true).
+		Height(m.height - m.topBoxHeight).
+		Width(m.width)
+
+	if m.focused == viewExecutions {
+		box = box.BorderStyle(lipgloss.DoubleBorder())
+	}
+
+	return box.Render("(E)xecutions")
 }

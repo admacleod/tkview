@@ -14,6 +14,7 @@ import (
 )
 
 type errMsg error
+type focusMsg view
 type orgTreeMsg []tkview.Organisation
 type envMsg environment.ID
 type agentsMsg []agent.Agent
@@ -22,6 +23,18 @@ type executionsMsg []execution.Execution
 func errCmd(err error) tea.Cmd {
 	return func() tea.Msg {
 		return errMsg(err)
+	}
+}
+
+func focusCmd(v view) tea.Cmd {
+	return func() tea.Msg {
+		return focusMsg(v)
+	}
+}
+
+func switchEnvCmd(id environment.ID) tea.Cmd {
+	return func() tea.Msg {
+		return envMsg(id)
 	}
 }
 
@@ -49,6 +62,12 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			case viewAgents:
 			case viewExecutions:
 			}
+		case key.Matches(msg.Key(), m.keyMap.FocusOrganisations):
+			return m, focusCmd(viewOrgs)
+		case key.Matches(msg.Key(), m.keyMap.FocusAgents):
+			return m, focusCmd(viewAgents)
+		case key.Matches(msg.Key(), m.keyMap.FocusExecutions):
+			return m, focusCmd(viewExecutions)
 		}
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
@@ -61,17 +80,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case orgTreeMsg:
 		m.orgs = msg
 
-		// After the orgs are loaded, select the initial environment.
-		err := m.tkview.SelectEnvironment(msg[0].Envs[0].ID)
-		if err != nil {
-			return m, errCmd(err)
-		}
-
-		// After the environment changes, load the agents and executions again.
-		return m, tea.Batch(
-			m.loadAgents,
-			m.loadExecutions,
-		)
+		// Select the initial environment.
+		// TODO: this is dangerous, the first org might not have any environments!
+		return m, switchEnvCmd(msg[0].Envs[0].ID)
 	case envMsg:
 		err := m.tkview.SelectEnvironment(environment.ID(msg))
 		if err != nil {
@@ -89,6 +100,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 	case executionsMsg:
 		m.executions = msg
+
+		return m, nil
+	case focusMsg:
+		m.focused = view(msg)
 
 		return m, nil
 	}
